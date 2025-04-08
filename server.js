@@ -16,13 +16,20 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 30000,
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-    .then(() => console.log('Connected to MongoDB'))
-    .catch(err => console.error('MongoDB connection error:', err));
+const connectWithRetry = () => {
+    console.log('MongoDB connection with retry');
+    mongoose.connect(process.env.MONGODB_URI)
+        .then(() => {
+            console.log('MongoDB is connected');
+        })
+        .catch(err => {
+            console.log('MongoDB connection unsuccessful, retry after 5 seconds.');
+            console.error('MongoDB connection error:', err);
+            setTimeout(connectWithRetry, 5000);
+        });
+};
+
+connectWithRetry();
 
 // Define Mongoose Schemas
 const userSchema = new mongoose.Schema({
