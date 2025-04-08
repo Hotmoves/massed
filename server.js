@@ -13,6 +13,12 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 require('dotenv').config();
 
 const app = express();
+
+// Trust proxy for secure cookies in production
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 const server = http.createServer(app);
 const io = socketIo(server);
 
@@ -109,7 +115,9 @@ const sessionMiddleware = session({
     }),
     cookie: {
         secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+        sameSite: 'none', // Allow cross-site cookies for OAuth
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
     }
 });
 
