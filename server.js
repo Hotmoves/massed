@@ -173,31 +173,67 @@ const upload = multer({ storage });
 
 // Routes
 app.get('/', async (req, res) => {
+    console.log('Root route accessed');
+    console.log('Session:', req.session);
+    console.log('Is authenticated:', req.isAuthenticated());
+    console.log('Email verified:', req.session.emailVerified);
+
     if (req.isAuthenticated() || req.session.emailVerified) {
-        const user = req.user || (await User.findOne({ email: req.session.emailVerified }));
-        const userFriendships = await Friendship.find({
-            $or: [{ user1: user.googleId || user.email }, { user2: user.googleId || user.email }]
-        });
-        const friends = await Promise.all(userFriendships.map(async f => {
-            const friendId = f.user1 === (user.googleId || user.email) ? f.user2 : f.user1;
-            return await User.findOne({ $or: [{ googleId: friendId }, { email: friendId }] });
-        })).then(results => results.filter(f => f));
-        const userFriendRequests = await FriendRequest.find({ to: user.email });
-        const users = await User.find();
-        res.render('index', { user, friends, friendRequests: userFriendRequests, users });
+        console.log('User is authenticated or email verified');
+        try {
+            const user = req.user || (await User.findOne({ email: req.session.emailVerified }));
+            console.log('User found:', user ? user.email : 'No user');
+
+            const userFriendships = await Friendship.find({
+                $or: [{ user1: user.googleId || user.email }, { user2: user.googleId || user.email }]
+            });
+            const friends = await Promise.all(userFriendships.map(async f => {
+                const friendId = f.user1 === (user.googleId || user.email) ? f.user2 : f.user1;
+                return await User.findOne({ $or: [{ googleId: friendId }, { email: friendId }] });
+            })).then(results => results.filter(f => f));
+            const userFriendRequests = await FriendRequest.find({ to: user.email });
+            const users = await User.find();
+
+            console.log('Rendering index page');
+            res.render('index', { user, friends, friendRequests: userFriendRequests, users });
+        } catch (err) {
+            console.error('Error in root route:', err);
+            res.status(500).send('An error occurred');
+        }
     } else {
+        console.log('User not authenticated, rendering sign-in page');
         res.render('sign-in');
     }
 });
 
-app.get('/auth/google', passport.authenticate('google', {
-    scope: ['profile', 'email']
-}));
+app.get('/auth/google', (req, res, next) => {
+    console.log('Starting Google authentication...');
+    passport.authenticate('google', {
+        scope: ['profile', 'email']
+    })(req, res, next);
+});
 
-app.get('/auth/google/callback', passport.authenticate('google', {
-    failureRedirect: '/'
-}), (req, res) => {
-    res.redirect('/');
+app.get('/auth/google/callback', (req, res, next) => {
+    console.log('Google callback received...');
+    passport.authenticate('google', (err, user, info) => {
+        console.log('Auth result:', { err, user: user ? 'User found' : 'No user', info });
+        if (err) {
+            console.error('Authentication error:', err);
+            return res.redirect('/');
+        }
+        if (!user) {
+            console.error('Authentication failed:', info);
+            return res.redirect('/');
+        }
+        req.logIn(user, (err) => {
+            if (err) {
+                console.error('Login error:', err);
+                return res.redirect('/');
+            }
+            console.log('User authenticated successfully');
+            return res.redirect('/');
+        });
+    })(req, res, next);
 });
 
 app.post('/sign-in-email', async (req, res) => {
