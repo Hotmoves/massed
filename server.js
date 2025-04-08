@@ -16,8 +16,10 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/massed', {
-    serverSelectionTimeoutMS: 30000
+mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 30000,
+    useNewUrlParser: true,
+    useUnifiedTopology: true
 })
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB connection error:', err));
@@ -70,10 +72,14 @@ app.use(express.json());
 
 // Session middleware with MongoDB store
 const sessionMiddleware = session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost/massed' })
+    store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+    }
 });
 
 app.use(sessionMiddleware);
@@ -92,7 +98,7 @@ app.set('view engine', 'ejs');
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3002/auth/google/callback'
+    callbackURL: process.env.GOOGLE_CALLBACK_URL
 }, async (accessToken, refreshToken, profile, done) => {
     let user = await User.findOne({ googleId: profile.id });
     if (!user) {
@@ -532,7 +538,7 @@ io.on('connection', async (socket) => {
             from: process.env.EMAIL_USER,
             to: mentionedEmail,
             subject: `Massed - You were mentioned in ${groupName}`,
-            text: `${sender} mentioned you in ${groupName}:\n\n"${message}"\n\nLog in to Massed to view the message: ${process.env.APP_URL || 'http://localhost:3002'}`
+            text: `${sender} mentioned you in ${groupName}:\n\n"${message}"\n\nLog in to Massed to view the message: ${process.env.APP_URL}`
         };
 
         try {
