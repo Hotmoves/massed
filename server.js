@@ -106,18 +106,19 @@ app.use(express.json());
 // Session middleware with MongoDB store
 const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI,
         ttl: 60 * 60 * 24 * 7, // 1 week
-        autoRemove: 'native'
+        autoRemove: 'native',
+        touchAfter: 24 * 3600 // time period in seconds
     }),
     cookie: {
         secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        sameSite: 'none', // Allow cross-site cookies for OAuth
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-site cookies for OAuth in production
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+        httpOnly: true
     }
 });
 
@@ -174,8 +175,10 @@ const upload = multer({ storage });
 // Routes
 app.get('/', async (req, res) => {
     console.log('Root route accessed');
-    console.log('Session:', req.session);
+    console.log('Session ID:', req.sessionID);
+    console.log('Session cookie:', req.session.cookie);
     console.log('Is authenticated:', req.isAuthenticated());
+    console.log('User in session:', req.user ? `User ID: ${req.user.googleId || req.user.email}` : 'No user');
     console.log('Email verified:', req.session.emailVerified);
 
     if (req.isAuthenticated() || req.session.emailVerified) {
@@ -231,7 +234,15 @@ app.get('/auth/google/callback', (req, res, next) => {
                 return res.redirect('/');
             }
             console.log('User authenticated successfully');
-            return res.redirect('/');
+            console.log('Session ID:', req.sessionID);
+            // Explicitly save the session before redirecting
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save error:', err);
+                }
+                console.log('Session saved successfully');
+                return res.redirect('/');
+            });
         });
     })(req, res, next);
 });
