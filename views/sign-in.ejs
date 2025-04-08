@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+    <title>Massed - Sign In</title>
+    <link rel="stylesheet" href="/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <div class="sidebar">
+        <div class="branding">
+            <div class="branding-content">
+                <img src="/massed_icon.png" alt="Massed Icon" class="branding-icon">
+                <h1 class="logo">Massed</h1>
+            </div>
+            <p class="tagline">Holbert Creations</p>
+            <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
+        </div>
+    </div>
+    <div class="chat-container">
+        <div class="sign-in-container">
+            <h2>Sign In</h2>
+            <p>Welcome to Massed! Sign in to start chatting with your groups.</p>
+            <a href="/auth/google" class="google-sign-in-btn">Sign in with Google</a>
+            <p style="margin: 20px 0;">OR</p>
+            <div class="email-sign-in">
+                <input id="sign-in-email" placeholder="Enter your email">
+                <button onclick="signInWithEmail()">Sign in with Email <span id="email-sign-in-loading" class="loading" style="display: none;"></span></button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Theme Toggle Logic
+    const themeToggle = document.getElementById('theme-toggle');
+    const htmlElement = document.documentElement;
+
+    // Load theme from localStorage
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    htmlElement.setAttribute('data-theme', savedTheme);
+    themeToggle.textContent = savedTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        themeToggle.textContent = newTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
+    });
+
+    function showLoading(id) {
+        document.getElementById(id).style.display = 'inline-block';
+    }
+
+    function hideLoading(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    function signInWithEmail() {
+        const email = document.getElementById('sign-in-email').value;
+        if (email) {
+            showLoading('email-sign-in-loading');
+            fetch('/sign-in-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    hideLoading('email-sign-in-loading');
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message);
+                        window.location.href = `/verify-email?email=${encodeURIComponent(email)}`;
+                    }
+                })
+                .catch(err => {
+                    hideLoading('email-sign-in-loading');
+                    alert('Error sending verification code.');
+                    console.error(err);
+                });
+        } else {
+            alert('Please enter an email address.');
+        }
+    }
+</script>
+</body>
+</html>

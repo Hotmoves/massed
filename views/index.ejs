@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+    <title>Massed</title>
+    <link rel="stylesheet" href="/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="branding">
+            <div class="branding-content">
+                <img src="/massed_icon.png" alt="Massed Icon" class="branding-icon">
+                <h1 class="logo">Massed</h1>
+            </div>
+            <p class="tagline">Holbert Creations</p>
+            <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button id="talking-tab" class="tab active">💬 Talking</button>
+            <button id="friends-tab" class="tab">👥 Friends</button>
+            <button id="profile-tab" class="tab">👤 Profile</button>
+        </div>
+
+        <!-- Talking Tab Content -->
+        <div id="talking-content" class="tab-content">
+            <div class="create-group">
+                <button onclick="showCreateGroupForm()" class="create-btn">Create Group</button>
+                <div id="create-group-form" style="display: none;">
+                    <input id="group-name" placeholder="Group name">
+                    <div class="add-members">
+                        <h4>Add Friends to Group</h4>
+                        <div id="friends-to-add">
+                            <% if (friends && friends.length > 0) { %>
+                                <% friends.forEach(friend => { %>
+                                    <label>
+                                        <input type="checkbox" class="friend-checkbox" value="<%= friend.email %>">
+                                        <%= friend.displayName %>
+                                    </label>
+                                <% }); %>
+                            <% } else { %>
+                                <p>No friends to add. Add some friends first!</p>
+                            <% } %>
+                        </div>
+                        <button onclick="createGroup()">Create <span id="create-loading" class="loading" style="display: none;"></span></button>
+                    </div>
+                </div>
+            </div>
+            <ul id="groups"></ul>
+        </div>
+
+        <!-- Friends Tab Content -->
+        <div id="friends-content" class="tab-content" style="display: none;">
+            <div class="friends-menu">
+                <div class="add-friend">
+                    <input id="friend-email" placeholder="Add friend by email">
+                    <button onclick="addFriend()">Add</button>
+                </div>
+                <div class="friend-requests">
+                    <h4>Pending Requests</h4>
+                    <ul id="friend-requests-list">
+                        <% friendRequests.forEach(request => { %>
+                            <% const fromUser = users.find(u => u.googleId === request.from || u.email === request.from); %>
+                            <li>
+                                <%= fromUser.displayName %> (<%= fromUser.email %>)
+                                <button onclick="acceptFriend('<%= fromUser.googleId || fromUser.email %>')">Accept</button>
+                                <button onclick="declineFriend('<%= fromUser.googleId || fromUser.email %>')" class="decline-btn">Decline</button>
+                            </li>
+                        <% }); %>
+                    </ul>
+                </div>
+                <div class="friends-list">
+                    <h4>Your Friends</h4>
+                    <ul id="friends-list">
+                        <% friends.forEach(friend => { %>
+                            <li>
+                                <%= friend.displayName %> (<%= friend.email %>)
+                                <button onclick="removeFriend('<%= friend.googleId || friend.email %>')" class="remove-btn">
+                                    Remove <span id="remove-loading-<%= friend.googleId || friend.email %>" class="loading" style="display: none;"></span>
+                                </button>
+                            </li>
+                        <% }); %>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Tab Content -->
+        <div id="profile-content" class="tab-content" style="display: none;">
+            <div class="profile-menu">
+                <h3>Profile Settings</h3>
+                <div class="profile-pic-section">
+                    <h4>Profile Picture</h4>
+                    <div class="current-profile-pic">
+                        <% if (user.photo) { %>
+                            <img src="<%= user.photo.startsWith('/uploads/') ? user.photo : `/proxy-image?url=${encodeURIComponent(user.photo)}` %>" alt="Profile Picture" class="profile-pic" id="current-profile-pic" onerror="this.src='/default_pfp.png';">
+                        <% } else { %>
+                            <img src="/default_pfp.png" alt="Profile Picture" class="profile-pic" id="current-profile-pic">
+                        <% } %>
+                    </div>
+                    <form id="profile-pic-form" enctype="multipart/form-data">
+                        <input type="file" id="profile-picture" name="profilePicture" accept="image/jpeg,image/png">
+                        <button type="button" onclick="updateProfilePicture()">Update Picture <span id="profile-pic-loading" class="loading" style="display: none;"></span></button>
+                    </form>
+                </div>
+                <div class="display-name-section">
+                    <h4>Display Name</h4>
+                    <input id="display-name" value="<%= user.displayName %>" placeholder="Enter new display name">
+                    <button onclick="updateDisplayName()">Update Name <span id="display-name-loading" class="loading" style="display: none;"></span></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="user-section">
+            <div class="user-profile">
+                <% if (user.photo) { %>
+                    <img src="<%= user.photo.startsWith('/uploads/') ? user.photo : `/proxy-image?url=${encodeURIComponent(user.photo)}` %>" alt="Profile Picture" class="profile-pic" id="user-profile-pic" onerror="this.src='/default_pfp.png';">
+                <% } else { %>
+                    <img src="/default_pfp.png" alt="Profile Picture" class="profile-pic" id="user-profile-pic">
+                <% } %>
+                <span id="user-name">
+            <%= user && user.displayName ? user.displayName : 'User' %>
+            <span class="account-indicator">Current Account</span>
+          </span>
+            </div>
+            <span id="user-email">
+          <%= user && user.email ? user.email : 'No email available' %>
+        </span>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+    </div>
+
+    <!-- Chat Area (Visible in Talking Tab) -->
+    <div class="chat-container">
+        <div id="chat-header">
+            <div class="group-info">
+                <h3 id="current-group-name"></h3>
+                <div class="group-members">
+                    <span onclick="toggleMembers()" id="members-toggle">Show Members</span>
+                    <div id="group-members-list" style="display: none;"></div>
+                </div>
+            </div>
+            <button id="delete-group-btn" style="display: none;" onclick="deleteGroup()">Delete Group</button>
+        </div>
+        <div id="chat"></div>
+        <div class="chat-input">
+            <div class="message-input-container">
+                <input id="message" placeholder="Type a message" onkeypress="if(event.key === 'Enter') sendMessage()" oninput="handleMessageInput(event)">
+                <div id="mention-dropdown" class="mention-dropdown" style="display: none;"></div>
+            </div>
+            <button onclick="sendMessage()" id="send-btn">Send</button>
+            <span id="send-loading" class="loading" style="display: none;"></span>
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let currentGroupId = null;
+    let currentGroupName = null;
+    let groupMembers = [];
+    let currentUser = '<%= user && user.displayName ? user.displayName : 'User' %>';
+    const userId = '<%= user.googleId || user.email %>';
+    let userEmails = {};
+    let renderedMessages = new Set();
+
+    // Theme Toggle Logic
+    const themeToggle = document.getElementById('theme-toggle');
+    const htmlElement = document.documentElement;
+
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    htmlElement.setAttribute('data-theme', savedTheme);
+    themeToggle.textContent = savedTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        themeToggle.textContent = newTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
+    });
+
+    function showTab(tab) {
+        const talkingContent = document.getElementById('talking-content');
+        const friendsContent = document.getElementById('friends-content');
+        const profileContent = document.getElementById('profile-content');
+        const talkingTab = document.getElementById('talking-tab');
+        const friendsTab = document.getElementById('friends-tab');
+        const profileTab = document.getElementById('profile-tab');
+        const chatContainer = document.querySelector('.chat-container');
+        const sidebar = document.querySelector('.sidebar');
+
+        if (tab === 'talking') {
+            talkingContent.style.display = 'block';
+            friendsContent.style.display = 'none';
+            profileContent.style.display = 'none';
+            talkingTab.classList.add('active');
+            friendsTab.classList.remove('active');
+            profileTab.classList.remove('active');
+            chatContainer.classList.remove('hidden');
+            sidebar.classList.remove('expanded');
+        } else if (tab === 'friends') {
+            talkingContent.style.display = 'none';
+            friendsContent.style.display = 'block';
+            profileContent.style.display = 'none';
+            talkingTab.classList.remove('active');
+            friendsTab.classList.add('active');
+            profileTab.classList.remove('active');
+            chatContainer.classList.add('hidden');
+            sidebar.classList.add('expanded');
+        } else if (tab === 'profile') {
+            talkingContent.style.display = 'none';
+            friendsContent.style.display = 'none';
+            profileContent.style.display = 'block';
+            talkingTab.classList.remove('active');
+            friendsTab.classList.remove('active');
+            profileTab.classList.add('active');
+            chatContainer.classList.add('hidden');
+            sidebar.classList.add('expanded');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('talking-tab').addEventListener('click', () => showTab('talking'));
+        document.getElementById('friends-tab').addEventListener('click', () => showTab('friends'));
+        document.getElementById('profile-tab').addEventListener('click', () => showTab('profile'));
+
+        requestNotificationPermission();
+    });
+
+    function showLoading(id) {
+        document.getElementById(id).style.display = 'inline-block';
+    }
+
+    function hideLoading(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    function handleMessageInput(event) {
+        const input = document.getElementById('message');
+        const value = input.value;
+        const dropdown = document.getElementById('mention-dropdown');
+
+        const lastAtIndex = value.lastIndexOf('@');
+        if (lastAtIndex !== -1) {
+            const query = value.substring(lastAtIndex + 1);
+            if (query.length >= 0 && !query.includes(' ')) {
+                const filteredMembers = groupMembers.filter(member =>
+                    member.displayName.toLowerCase().startsWith(query.toLowerCase())
+                );
+                if (filteredMembers.length > 0) {
+                    dropdown.innerHTML = '';
+                    filteredMembers.forEach(member => {
+                        const div = document.createElement('div');
+                        div.textContent = member.displayName;
+                        div.onclick = () => {
+                            const beforeAt = value.substring(0, lastAtIndex);
+                            input.value = `${beforeAt}@${member.displayName} `;
+                            dropdown.style.display = 'none';
+                            input.focus();
+                        };
+                        dropdown.appendChild(div);
+                    });
+                    dropdown.style.display = 'block';
+                    return;
+                }
+            }
+        }
+        dropdown.style.display = 'none';
+    }
+
+    // Function to get "Today", "Yesterday", or "X days ago"
+    function getRelativeDate(timestamp) {
+        const messageDate = new Date(timestamp);
+        const today = new Date();
+        const diffTime = today - messageDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        // Reset time part for comparison
+        today.setHours(0, 0, 0, 0);
+        messageDate.setHours(0, 0, 0, 0);
+
+        if (messageDate.getTime() === today.getTime()) {
+            return 'Today';
+        } else if (diffDays === 1) {
+            return 'Yesterday';
+        } else {
+            return `${diffDays} days ago`;
+        }
+    }
+
+    // Function to sort messages by timestamp
+    function sortMessages() {
+        const chat = document.getElementById('chat');
+        const messages = Array.from(chat.children);
+
+        // Debug message counts
+        console.log(`Sorting ${messages.length} messages`);
+
+        messages.sort((a, b) => {
+            const timestampA = parseInt(a.getAttribute('data-timestamp')) || 0;
+            const timestampB = parseInt(b.getAttribute('data-timestamp')) || 0;
+            console.log(`Sorting: ${a.querySelector('strong').textContent} (${timestampA}) vs ${b.querySelector('strong').textContent} (${timestampB})`);
+            return timestampA - timestampB;
+        });
+
+        // Clear and re-append in sorted order
+        chat.innerHTML = '';
+        messages.forEach(message => chat.appendChild(message));
+
+        // Scroll to bottom after sorting
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    socket.on('message', (data) => {
+        if (data.groupId === currentGroupId) {
+            const messageKey = `${data.email}-${data.timestamp}`;
+            if (renderedMessages.has(messageKey)) {
+                return;
+            }
+
+            const chat = document.getElementById('chat');
+            fetch(`/get-user?email=${encodeURIComponent(data.email)}`)
+                .then(res => res.json())
+                .then(user => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message';
+                    messageDiv.setAttribute('data-email', data.email);
+                    // Ensure the timestamp is parsed correctly
+                    const timestamp = new Date(data.timestamp);
+                    if (isNaN(timestamp.getTime())) {
+                        console.error('Invalid timestamp received:', data.timestamp);
+                        return;
+                    }
+                    messageDiv.setAttribute('data-timestamp', timestamp.getTime());
+                    let msgContent = data.msg;
+                    groupMembers.forEach(member => {
+                        const mentionRegex = new RegExp(`@${member.displayName}\\b`, 'g');
+                        msgContent = msgContent.replace(mentionRegex, `<span class="mention">@${member.displayName}</span>`);
+                    });
+                    messageDiv.innerHTML = `
+                        <div class="message-header">
+                            ${user.photo ? `<img src="${user.photo.startsWith('/uploads/') ? user.photo : `/proxy-image?url=${encodeURIComponent(user.photo)}`}" alt="Profile Picture" class="message-pic" onerror="this.src='/default_pfp.png';">` : `<img src="/default_pfp.png" alt="Profile Picture" class="message-pic">`}
+                            <strong>${data.user}</strong>
+                            <div class="timestamp-container">
+                                <span class="timestamp">${timestamp.toLocaleTimeString()}</span>
+                                <span class="relative-date">${getRelativeDate(timestamp)}</span>
+                            </div>
+                        </div>
+                        <p>${msgContent}</p>
+                    `;
+                    chat.appendChild(messageDiv);
+                    renderedMessages.add(messageKey);
+                    console.log(`New message from ${data.user} at ${timestamp.getTime()} (${timestamp.toLocaleTimeString()})`);
+                    setTimeout(() => {
+                        sortMessages();
+                        chat.scrollTop = chat.scrollHeight;
+                    }, 100); // Add a small delay to ensure DOM updates are complete
+
+                    groupMembers.forEach(member => {
+                        const mentionRegex = new RegExp(`@${member.displayName}\\b`, 'g');
+                        if (data.user !== member.displayName && msgContent.match(mentionRegex)) {
+                            socket.emit('mentionNotification', {
+                                mentionedUser: member.displayName,
+                                mentionedEmail: member.email,
+                                sender: data.user,
+                                message: data.msg,
+                                groupId: currentGroupId,
+                                groupName: currentGroupName
+                            });
+
+                            if (member.displayName === currentUser) {
+                                showNotification(`${data.user} mentioned you in ${currentGroupName}`, data.msg);
+                            }
+                        }
+                    });
+                })
+                .catch(err => {
+                    console.error('Error fetching user for message:', err);
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message';
+                    messageDiv.setAttribute('data-email', data.email);
+                    const timestamp = new Date(data.timestamp);
+                    if (isNaN(timestamp.getTime())) {
+                        console.error('Invalid timestamp received:', data.timestamp);
+                        return;
+                    }
+                    messageDiv.setAttribute('data-timestamp', timestamp.getTime());
+                    let msgContent = data.msg;
+                    groupMembers.forEach(member => {
+                        const mentionRegex = new RegExp(`@${member.displayName}\\b`, 'g');
+                        msgContent = msgContent.replace(mentionRegex, `<span class="mention">@${member.displayName}</span>`);
+                    });
+                    messageDiv.innerHTML = `
+                        <div class="message-header">
+                            <strong>${data.user}</strong>
+                            <div class="timestamp-container">
+                                <span class="timestamp">${timestamp.toLocaleTimeString()}</span>
+                                <span class="relative-date">${getRelativeDate(timestamp)}</span>
+                            </div>
+                        </div>
+                        <p>${msgContent}</p>
+                    `;
+                    chat.appendChild(messageDiv);
+                    renderedMessages.add(messageKey);
+                    console.log(`New message (error case) from ${data.user} at ${timestamp.getTime()} (${timestamp.toLocaleTimeString()})`);
+                    setTimeout(() => {
+                        sortMessages();
+                        chat.scrollTop = chat.scrollHeight;
+                    }, 100); // Add a small delay to ensure DOM updates are complete
+                });
+        }
+    });
+
+    socket.on('messagesUpdated', (data) => {
+        const messages = document.querySelectorAll('#chat .message');
+        messages.forEach(message => {
+            const strong = message.querySelector('strong');
+            if (strong && strong.textContent === data.oldDisplayName) {
+                strong.textContent = data.newDisplayName;
+            }
+        });
+    });
+
+    socket.on('groupList', (groups) => {
+        const groupList = document.getElementById('groups');
+        groupList.innerHTML = '';
+
+        function getFirstEmoji(text) {
+            const emojiRegex = /[\p{Emoji_Presentation}|\p{Emoji}\u200D]+/gu;
+            const match = text.match(emojiRegex);
+            return match ? match[0] : null;
+        }
+
+        groups.forEach(group => {
+            const li = document.createElement('li');
+            const emoji = getFirstEmoji(group.name);
+            const displayName = emoji ? group.name.replace(emoji, '').trim() : group.name;
+            const groupIcon = emoji || '👥';
+            li.innerHTML = `
+                <div class="group-item">
+                    <span class="group-icon">${groupIcon}</span>
+                    <div class="group-info">
+                        <span class="group-name">${displayName}</span>
+                        <span class="member-count">${group.members.length} members</span>
+                    </div>
+                </div>
+            `;
+            li.onclick = () => {
+                joinGroup(group._id, group.ownerId);
+                showTab('talking');
+            };
+            if (group._id === currentGroupId) {
+                li.classList.add('active');
+            }
+            groupList.appendChild(li);
+        });
+    });
+
+    socket.on('groupMembers', (data) => {
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+
+        if (currentGroupId) {
+            socket.emit('leaveGroup', currentGroupId);
+        }
+
+        currentGroupId = data.groupId;
+        currentGroupName = data.group;
+        document.getElementById('current-group-name').textContent = data.group;
+        const deleteBtn = document.getElementById('delete-group-btn');
+        deleteBtn.style.display = data.ownerId === userId ? 'inline-block' : 'none';
+
+        const membersDiv = document.getElementById('group-members-list');
+        membersDiv.innerHTML = data.members.map(m => m.displayName).join(', ');
+
+        groupMembers = data.members;
+        userEmails = {};
+        groupMembers.forEach(member => {
+            userEmails[member.displayName] = member.email;
+        });
+
+        const chat = document.getElementById('chat');
+        chat.innerHTML = '';
+        renderedMessages.clear();
+
+        if (data.messages && data.messages.length > 0) {
+            // Sort messages by timestamp (convert to number)
+            data.messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            // Track how many messages we've processed
+            let processedMessages = 0;
+            const totalMessages = data.messages.length;
+
+            data.messages.forEach(msg => {
+                const messageKey = `${msg.email}-${msg.timestamp}`;
+                fetch(`/get-user?email=${encodeURIComponent(msg.email)}`)
+                    .then(res => res.json())
+                    .then(user => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message';
+                        messageDiv.setAttribute('data-email', msg.email);
+                        const timestamp = new Date(msg.timestamp);
+                        if (isNaN(timestamp.getTime())) {
+                            console.error('Invalid timestamp received in groupMembers:', msg.timestamp);
+                            processedMessages++;
+                            return;
+                        }
+                        messageDiv.setAttribute('data-timestamp', timestamp.getTime());
+                        let msgContent = msg.msg;
+                        groupMembers.forEach(member => {
+                            const mentionRegex = new RegExp(`@${member.displayName}\\b`, 'g');
+                            msgContent = msgContent.replace(mentionRegex, `<span class="mention">@${member.displayName}</span>`);
+                        });
+                        messageDiv.innerHTML = `
+                            <div class="message-header">
+                                ${user.photo ? `<img src="${user.photo.startsWith('/uploads/') ? user.photo : `/proxy-image?url=${encodeURIComponent(user.photo)}`}" alt="Profile Picture" class="message-pic" onerror="this.src='/default_pfp.png';">` : `<img src="/default_pfp.png" alt="Profile Picture" class="message-pic">`}
+                                <strong>${msg.user}</strong>
+                                <div class="timestamp-container">
+                                    <span class="timestamp">${timestamp.toLocaleTimeString()}</span>
+                                    <span class="relative-date">${getRelativeDate(timestamp)}</span>
+                                </div>
+                            </div>
+                            <p>${msgContent}</p>
+                        `;
+                        chat.appendChild(messageDiv);
+                        renderedMessages.add(messageKey);
+
+                        // Check if this is the last message to be processed
+                        processedMessages++;
+                        if (processedMessages >= totalMessages) {
+                            // Sort all messages once they're all loaded
+                            setTimeout(() => sortMessages(), 100);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error fetching user for message:', err);
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message';
+                        messageDiv.setAttribute('data-email', msg.email);
+                        const timestamp = new Date(msg.timestamp);
+                        if (isNaN(timestamp.getTime())) {
+                            console.error('Invalid timestamp received in groupMembers (error case):', msg.timestamp);
+                            processedMessages++;
+                            return;
+                        }
+                        messageDiv.setAttribute('data-timestamp', timestamp.getTime());
+                        let msgContent = msg.msg;
+                        groupMembers.forEach(member => {
+                            const mentionRegex = new RegExp(`@${member.displayName}\\b`, 'g');
+                            msgContent = msgContent.replace(mentionRegex, `<span class="mention">@${member.displayName}</span>`);
+                        });
+                        messageDiv.innerHTML = `
+                            <div class="message-header">
+                                <strong>${msg.user}</strong>
+                                <div class="timestamp-container">
+                                    <span class="timestamp">${timestamp.toLocaleTimeString()}</span>
+                                    <span class="relative-date">${getRelativeDate(timestamp)}</span>
+                                </div>
+                            </div>
+                            <p>${msgContent}</p>
+                        `;
+                        chat.appendChild(messageDiv);
+                        renderedMessages.add(messageKey);
+
+                        // Check if this is the last message to be processed
+                        processedMessages++;
+                        if (processedMessages >= totalMessages) {
+                            // Sort all messages once they're all loaded
+                            setTimeout(() => sortMessages(), 100);
+                        }
+                    });
+            });
+        }
+        chat.scrollTop = chat.scrollHeight;
+
+        document.querySelectorAll('#groups li').forEach(li => li.classList.remove('active'));
+        const selectedGroup = Array.from(document.querySelectorAll('#groups li')).find(
+            li => li.querySelector('.group-name').textContent === data.group
+        );
+        if (selectedGroup) selectedGroup.classList.add('active');
+    });
+
+    socket.on('groupDeleted', (data) => {
+        if (currentGroupId === data) {
+            currentGroupId = null;
+            currentGroupName = null;
+            document.getElementById('current-group-name').textContent = '';
+            document.getElementById('group-members-list').innerHTML = '';
+            document.getElementById('members-toggle').textContent = 'Show Members';
+            document.getElementById('group-members-list').style.display = 'none';
+            document.getElementById('delete-group-btn').style.display = 'none';
+            document.getElementById('chat').innerHTML = '';
+            groupMembers = [];
+            renderedMessages.clear();
+        }
+    });
+
+    socket.on('friendRequest', (data) => {
+        if (data.to === '<%= user.email %>') {
+            const friendRequestsList = document.getElementById('friend-requests-list');
+            const li = document.createElement('li');
+            li.innerHTML = `
+                ${data.fromUser.displayName} (${data.fromUser.email})
+                <button onclick="acceptFriend('${data.fromUser.googleId || data.fromUser.email}')">Accept</button>
+                <button onclick="declineFriend('${data.fromUser.googleId || data.fromUser.email}')" class="decline-btn">Decline</button>
+            `;
+            friendRequestsList.appendChild(li);
+        }
+    });
+
+    socket.on('friendshipUpdate', (data) => {
+        if (data.userId === userId) {
+            fetch('/get-friends', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(res => res.json())
+                .then(friends => {
+                    const friendsList = document.getElementById('friends-list');
+                    friendsList.innerHTML = '';
+                    friends.forEach(friend => {
+                        const li = document.createElement('li');
+                        li.innerHTML = `
+                            ${friend.displayName} (${friend.email})
+                            <button onclick="removeFriend('${friend.googleId || friend.email}')" class="remove-btn">
+                                Remove <span id="remove-loading-${friend.googleId || friend.email}" class="loading" style="display: none;"></span>
+                            </button>
+                        `;
+                        friendsList.appendChild(li);
+                    });
+
+                    const friendsToAdd = document.getElementById('friends-to-add');
+                    friendsToAdd.innerHTML = '';
+                    if (friends && friends.length > 0) {
+                        friends.forEach(friend => {
+                            const label = document.createElement('label');
+                            label.innerHTML = `
+                                <input type="checkbox" class="friend-checkbox" value="${friend.email}">
+                                ${friend.displayName}
+                            `;
+                            friendsToAdd.appendChild(label);
+                        });
+                    } else {
+                        friendsToAdd.innerHTML = '<p>No friends to add. Add some friends first!</p>';
+                    }
+
+                    const friendRequestsList = document.getElementById('friend-requests-list');
+                    friendRequestsList.innerHTML = '';
+                })
+                .catch(err => {
+                    console.error('Error updating friends list:', err);
+                    location.reload();
+                });
+        }
+    });
+
+    socket.on('userUpdated', (data) => {
+        if (data.googleId === userId || data.email === userId) {
+            currentUser = data.displayName;
+            document.getElementById('user-name').childNodes[0].textContent = data.displayName;
+            document.getElementById('display-name').value = data.displayName;
+
+            const userProfilePic = document.getElementById('user-profile-pic');
+            const currentProfilePic = document.getElementById('current-profile-pic');
+            if (data.photo) {
+                const imgSrc = data.photo.startsWith('/uploads/') ? data.photo : `/proxy-image?url=${encodeURIComponent(data.photo)}`;
+                if (userProfilePic) {
+                    userProfilePic.src = imgSrc;
+                    userProfilePic.style.display = 'block';
+                }
+                if (currentProfilePic) {
+                    currentProfilePic.src = imgSrc;
+                    currentProfilePic.style.display = 'block';
+                }
+            } else {
+                if (userProfilePic) {
+                    userProfilePic.src = '/default_pfp.png';
+                    userProfilePic.style.display = 'block';
+                }
+                if (currentProfilePic) {
+                    currentProfilePic.src = '/default_pfp.png';
+                    currentProfilePic.style.display = 'block';
+                }
+            }
+        }
+
+        if (groupMembers.some(member => member.email === data.email)) {
+            groupMembers = groupMembers.map(member => {
+                if (member.email === data.email) {
+                    return { ...member, displayName: data.displayName };
+                }
+                return member;
+            });
+            const membersDiv = document.getElementById('group-members-list');
+            membersDiv.innerHTML = groupMembers.map(m => m.displayName).join(', ');
+        }
+
+        const messages = document.querySelectorAll('#chat .message');
+        messages.forEach(message => {
+            const email = message.getAttribute('data-email');
+            if (email === data.email) {
+                const strong = message.querySelector('strong');
+                const img = message.querySelector('.message-pic');
+                if (strong) {
+                    strong.textContent = data.displayName;
+                }
+                if (img && data.photo) {
+                    img.src = data.photo.startsWith('/uploads/') ? data.photo : `/proxy-image?url=${encodeURIComponent(data.photo)}`;
+                    img.style.display = 'block';
+                } else if (img) {
+                    img.src = '/default_pfp.png';
+                    img.style.display = 'block';
+                }
+            }
+        });
+    });
+
+    function requestNotificationPermission() {
+        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    console.log('Notification permission granted.');
+                } else {
+                    console.log('Notification permission denied.');
+                }
+            });
+        }
+    }
+
+    function showNotification(title, body) {
+        if (Notification.permission === 'granted') {
+            new Notification(title, {
+                body: body,
+                icon: '/favicon.ico'
+            });
+        }
+    }
+
+    function addFriend() {
+        const email = document.getElementById('friend-email').value;
+        if (email) {
+            fetch('/add-friend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message);
+                        document.getElementById('friend-email').value = '';
+                    }
+                });
+        }
+    }
+
+    function acceptFriend(fromId) {
+        fetch('/accept-friend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fromId })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    alert(data.message);
+                }
+            });
+    }
+
+    function declineFriend(fromId) {
+        fetch('/decline-friend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fromId })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    alert(data.message);
+                    const friendRequestsList = document.getElementById('friend-requests-list');
+                    friendRequestsList.innerHTML = '';
+                }
+            });
+    }
+
+    function removeFriend(friendId) {
+        if (confirm('Are you sure you want to remove this friend?')) {
+            showLoading('remove-loading-' + friendId);
+            fetch('/remove-friend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    hideLoading('remove-loading-' + friendId);
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        }
+    }
+
+    function showCreateGroupForm() {
+        const form = document.getElementById('create-group-form');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function createGroup() {
+        const groupName = document.getElementById('group-name').value;
+        const selectedFriends = Array.from(document.querySelectorAll('.friend-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+        const memberEmails = [...selectedFriends];
+
+        if (groupName) {
+            showLoading('create-loading');
+            socket.emit('createGroup', { groupName, memberEmails }, (response) => {
+                hideLoading('create-loading');
+                if (response.error) {
+                    alert(response.error);
+                } else {
+                    document.getElementById('group-name').value = '';
+                    document.querySelectorAll('.friend-checkbox').forEach(cb => cb.checked = false);
+                    showCreateGroupForm();
+                }
+            });
+        }
+    }
+
+    function joinGroup(groupId, ownerId) {
+        socket.emit('joinGroup', groupId);
+        showTab('talking');
+    }
+
+    function deleteGroup() {
+        if (currentGroupId && confirm('Are you sure you want to delete this group?')) {
+            socket.emit('deleteGroup', currentGroupId, (response) => {
+                if (response.error) {
+                    alert(response.error);
+                } else {
+                    currentGroupId = null;
+                    currentGroupName = null;
+                    document.getElementById('current-group-name').textContent = '';
+                    document.getElementById('group-members-list').innerHTML = '';
+                    document.getElementById('members-toggle').textContent = 'Show Members';
+                    document.getElementById('group-members-list').style.display = 'none';
+                    document.getElementById('delete-group-btn').style.display = 'none';
+                    document.getElementById('chat').innerHTML = '';
+                    groupMembers = [];
+                    renderedMessages.clear();
+                }
+            });
+        }
+    }
+
+    function toggleMembers() {
+        const membersList = document.getElementById('group-members-list');
+        const toggleBtn = document.getElementById('members-toggle');
+        if (membersList.style.display === 'none') {
+            membersList.style.display = 'block';
+            toggleBtn.textContent = 'Hide Members';
+        } else {
+            membersList.style.display = 'none';
+            toggleBtn.textContent = 'Show Members';
+        }
+    }
+
+    function sendMessage() {
+        const msg = document.getElementById('message').value;
+        if (msg && currentGroupId) {
+            showLoading('send-loading');
+            socket.emit('message', { groupId: currentGroupId, msg, user: currentUser, email: '<%= user.email %>' });
+            document.getElementById('message').value = '';
+            document.getElementById('mention-dropdown').style.display = 'none';
+            setTimeout(() => hideLoading('send-loading'), 500);
+        }
+    }
+
+    function updateDisplayName() {
+        const displayName = document.getElementById('display-name').value;
+        if (displayName) {
+            showLoading('display-name-loading');
+            fetch('/update-name', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayName })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    hideLoading('display-name-loading');
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(err => {
+                    hideLoading('display-name-loading');
+                    alert('Error updating display name.');
+                    console.error(err);
+                });
+        }
+    }
+
+    function updateProfilePicture() {
+        const form = document.getElementById('profile-pic-form');
+        const formData = new FormData(form);
+
+        showLoading('profile-pic-loading');
+        fetch('/update-profile-picture', {
+            method: 'POST',
+            body: formData
+        })
+            .then(res => res.json())
+            .then(data => {
+                hideLoading('profile-pic-loading');
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    alert(data.message);
+                    document.getElementById('profile-picture').value = '';
+                }
+            })
+            .catch(err => {
+                hideLoading('profile-pic-loading');
+                alert('Error updating profile picture.');
+                console.error(err);
+            });
+    }
+</script>
+</body>
+</html>

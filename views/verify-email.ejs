@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+    <title>Massed - Verify Email</title>
+    <link rel="stylesheet" href="/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <div class="sidebar">
+        <div class="branding">
+            <div class="branding-content">
+                <img src="/massed_icon.png" alt="Massed Icon" class="branding-icon">
+                <h1 class="logo">Massed</h1>
+            </div>
+            <p class="tagline">Holbert Creations</p>
+            <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
+        </div>
+    </div>
+    <div class="chat-container">
+        <div class="verify-email-container">
+            <h2>Verify Your Email</h2>
+            <p>We sent a verification code to <strong><%= email %></strong>.</p>
+            <p>Please enter the code below to verify your email address.</p>
+            <input id="verification-code" placeholder="Enter verification code" type="text">
+            <button onclick="verifyEmail()">Verify <span id="verify-loading" class="loading" style="display: none;"></span></button>
+            <p><a href="/" onclick="clearSession()">Back to Sign In</a></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Theme Toggle Logic
+    const themeToggle = document.getElementById('theme-toggle');
+    const htmlElement = document.documentElement;
+
+    // Load theme from localStorage
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    htmlElement.setAttribute('data-theme', savedTheme);
+    themeToggle.textContent = savedTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        themeToggle.textContent = newTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
+    });
+
+    function showLoading(id) {
+        document.getElementById(id).style.display = 'inline-block';
+    }
+
+    function hideLoading(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    function verifyEmail() {
+        const email = '<%= email %>';
+        const code = document.getElementById('verification-code').value;
+        if (code) {
+            showLoading('verify-loading');
+            fetch('/verify-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, code })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    hideLoading('verify-loading');
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message);
+                        window.location.href = '/';
+                    }
+                })
+                .catch(err => {
+                    hideLoading('verify-loading');
+                    alert('Error verifying email.');
+                    console.error(err);
+                });
+        } else {
+            alert('Please enter the verification code.');
+        }
+    }
+
+    function clearSession() {
+        fetch('/logout', { method: 'GET' })
+            .then(() => {
+                window.location.href = '/';
+            });
+    }
+</script>
+</body>
+</html>
