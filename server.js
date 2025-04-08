@@ -9,6 +9,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
 const MongoStore = require('connect-mongo');
+const { MongoClient, ServerApiVersion } = require('mongodb');
 require('dotenv').config();
 
 const app = express();
@@ -16,20 +17,39 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // Connect to MongoDB
-const connectWithRetry = () => {
-    console.log('MongoDB connection with retry');
-    mongoose.connect(process.env.MONGODB_URI)
-        .then(() => {
-            console.log('MongoDB is connected');
-        })
-        .catch(err => {
-            console.log('MongoDB connection unsuccessful, retry after 5 seconds.');
-            console.error('MongoDB connection error:', err);
-            setTimeout(connectWithRetry, 5000);
-        });
-};
+const uri = process.env.MONGODB_URI;
 
-connectWithRetry();
+// Create a MongoClient with a MongoClientOptions object
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
+});
+
+async function connectToMongoDB() {
+  try {
+    // Connect the client to the server
+    await client.connect();
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log("Successfully connected to MongoDB!");
+
+    // Set up mongoose connection using the same URI
+    await mongoose.connect(uri);
+    console.log("Mongoose connected to MongoDB!");
+
+    return true;
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    setTimeout(connectToMongoDB, 5000);
+    return false;
+  }
+}
+
+// Connect to MongoDB with retry
+connectToMongoDB();
 
 // Define Mongoose Schemas
 const userSchema = new mongoose.Schema({
@@ -82,7 +102,11 @@ const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI,
+        ttl: 60 * 60 * 24 * 7, // 1 week
+        autoRemove: 'native'
+    }),
     cookie: {
         secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
         maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
